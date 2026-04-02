@@ -89,12 +89,16 @@ gettar(){
 	webget /tmp/clashfm.tar.gz $tarurl
 	[ "$result" != "200" ] && echo "文件下载失败,请尝试使用其他安装源！" && exit 1
 	$clashdir/start.sh stop 2>/dev/null
-	#解压
+	#解压到/tmp，再复制到最终目录，避免/data空间不足导致解压失败
 	echo -----------------------------------------------
 	echo 开始解压文件！
-	mkdir -p $clashdir > /dev/null
-	tar -zxvf '/tmp/clashfm.tar.gz' -C $clashdir/
-	[ $? -ne 0 ] && echo "文件解压失败！" && rm -rf /tmp/clashfm.tar.gz && exit 1 
+	tmp_extract_dir=/tmp/clash_extract
+	rm -rf $tmp_extract_dir
+	mkdir -p $tmp_extract_dir $clashdir > /dev/null
+	tar -zxf '/tmp/clashfm.tar.gz' -C $tmp_extract_dir
+	[ $? -ne 0 ] && echo "文件解压失败！" && rm -rf /tmp/clashfm.tar.gz $tmp_extract_dir && exit 1
+	cp -af $tmp_extract_dir/. $clashdir/
+	[ $? -ne 0 ] && echo "文件复制失败！" && rm -rf /tmp/clashfm.tar.gz $tmp_extract_dir && exit 1
 	#初始化文件目录
 	[ -f "$clashdir/mark" ] || echo '#标识clash运行状态的文件，不明勿动！' > $clashdir/mark
 	#判断系统类型写入不同的启动文件
@@ -148,7 +152,7 @@ gettar(){
 		chmod 755 $clashdir/misnap_init.sh
 		uci set firewall.ShellClash=include
 		uci set firewall.ShellClash.type='script'
-		uci set firewall.ShellClash.path='/data/clash/misnap_init.sh'
+		uci set firewall.ShellClash.path='/data/userdisk/clash/misnap_init.sh'
 		uci set firewall.ShellClash.enabled='1'
 		uci commit firewall
 		setconfig systype $systype
@@ -163,7 +167,8 @@ gettar(){
 		nvram commit
 	}
 	#删除临时文件
-	rm -rf /tmp/clashfm.tar.gz 
+	rm -rf /tmp/clashfm.tar.gz
+	rm -rf /tmp/clash_extract
 	rm -rf $clashdir/clash.service
 }
 #下载及安装
@@ -195,7 +200,7 @@ if [ -n "$systype" ];then
 	[ "$systype" = "Padavan" ] && dir=/etc/storage
 	[ "$systype" = "mi_snapshot" ] && {
 		$echo "\033[33m检测到当前设备为小米官方系统，请选择安装位置\033[0m"	
-		$echo " 1 安装到/data目录(推荐，支持软固化功能)"
+		$echo " 1 安装到/data/userdisk目录(推荐，支持软固化功能)"
 		$echo " 2 安装到USB设备(支持软固化功能)"
 		[ "$(dir_avail /etc)" != 0 ] && $echo " 3 安装到/etc目录(不推荐)"
 		$echo " 0 退出安装"
@@ -203,7 +208,7 @@ if [ -n "$systype" ];then
 		read -p "请输入相应数字 > " num
 		case "$num" in 
 		1)
-			dir=/data
+			dir=/data/userdisk
 			;;
 		2)
 			set_usb_dir ;;
@@ -212,8 +217,8 @@ if [ -n "$systype" ];then
 				dir=/etc
 				systype=""
 			else
-				$echo "\033[31m你的设备不支持安装到/etc目录，已改为安装到/data\033[0m"	
-				dir=data
+				$echo "\033[31m你的设备不支持安装到/etc目录，已改为安装到/data/userdisk\033[0m"	
+				dir=/data/userdisk
 			fi
 			;;
 		*)
