@@ -3,6 +3,17 @@
 
 echo='echo -e' && [ -n "$(echo -e|grep e)" ] && echo=echo
 #[ -z "$1" ] && test=0 || test=$1
+# 优先使用启动参数传入的安装源
+[ -n "$1" ] && url="$1"
+# 兼容 GitHub 页面链接，自动转换为 raw 链接
+case "$url" in
+  https://github.com/*/tree/*)
+    url=$(echo "$url" | sed 's|github.com|raw.githubusercontent.com|;s|/tree/|/|')
+    ;;
+  https://github.com/*/blob/*)
+    url=$(echo "$url" | sed 's|github.com|raw.githubusercontent.com|;s|/blob/|/|')
+    ;;
+esac
 
 echo "***********************************************"
 echo "**                 欢迎使用                  **"
@@ -69,7 +80,7 @@ read -p "请输入相应数字 > " num
 if [ -z $num ];then
 	echo 安装已取消！ && exit 1;
 elif [ "$num" = "1" ];then
-	webget /tmp/clashrelease $url_cdn/master/bin/release_version echoon rediroff 2>/tmp/clashrelease
+	webget /tmp/clashrelease $url_cdn/bin/release_version echoon rediroff 2>/tmp/clashrelease
 	if [ "$result" = "200" ];then
 		release_new=$(cat /tmp/clashrelease | head -1)
 		url_dl="$url_cdn/$release_new"
