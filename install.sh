@@ -58,7 +58,7 @@ webget(){
 	fi
 }
 #检查更新
-url_cdn="https://raw.fastgit.org/juewuy/ShellClash"
+url_cdn="$url"
 [ -z "$url" ] && url=$url_cdn
 echo -----------------------------------------------
 $echo "\033[33m请选择想要安装的版本：\033[0m"	
@@ -86,19 +86,21 @@ rm -rf /tmp/clashrelease
 tarurl=$url_dl/bin/clashfm.tar.gz
 
 gettar(){
-	webget /tmp/clashfm.tar.gz $tarurl
-	[ "$result" != "200" ] && echo "文件下载失败,请尝试使用其他安装源！" && exit 1
+	curl -L -k -o /tmp/clashfm.tar.gz "$tarurl"
+	[ $? -ne 0 ] && echo "文件下载失败,请尝试使用其他安装源！" && exit 1
+	gzip -t /tmp/clashfm.tar.gz >/dev/null 2>&1 || { echo "下载的文件不是有效的gzip压缩包！"; rm -rf /tmp/clashfm.tar.gz; exit 1; }
+	tar -tzf /tmp/clashfm.tar.gz >/dev/null 2>&1 || { echo "下载的文件不是有效的tar.gz安装包！"; rm -rf /tmp/clashfm.tar.gz; exit 1; }
 	$clashdir/start.sh stop 2>/dev/null
-	#解压到/tmp，再复制到最终目录，避免/data空间不足导致解压失败
+	#解压
 	echo -----------------------------------------------
 	echo 开始解压文件！
-	tmp_extract_dir=/tmp/clash_extract
-	rm -rf $tmp_extract_dir
-	mkdir -p $tmp_extract_dir $clashdir > /dev/null
-	tar -zxf '/tmp/clashfm.tar.gz' -C $tmp_extract_dir
-	[ $? -ne 0 ] && echo "文件解压失败！" && rm -rf /tmp/clashfm.tar.gz $tmp_extract_dir && exit 1
-	cp -af $tmp_extract_dir/. $clashdir/
-	[ $? -ne 0 ] && echo "文件复制失败！" && rm -rf /tmp/clashfm.tar.gz $tmp_extract_dir && exit 1
+	tmp_extract_dir="/tmp/clash_extract"
+	rm -rf "$tmp_extract_dir"
+	mkdir -p "$tmp_extract_dir" "$clashdir" > /dev/null
+	tar -zxf /tmp/clashfm.tar.gz -C "$tmp_extract_dir"
+	[ $? -ne 0 ] && echo "文件解压失败！" && rm -rf /tmp/clashfm.tar.gz "$tmp_extract_dir" && exit 1
+	cp -af "$tmp_extract_dir"/. "$clashdir"/
+	[ $? -ne 0 ] && echo "文件复制失败！" && rm -rf /tmp/clashfm.tar.gz "$tmp_extract_dir" && exit 1 
 	#初始化文件目录
 	[ -f "$clashdir/mark" ] || echo '#标识clash运行状态的文件，不明勿动！' > $clashdir/mark
 	#判断系统类型写入不同的启动文件
@@ -200,7 +202,7 @@ if [ -n "$systype" ];then
 	[ "$systype" = "Padavan" ] && dir=/etc/storage
 	[ "$systype" = "mi_snapshot" ] && {
 		$echo "\033[33m检测到当前设备为小米官方系统，请选择安装位置\033[0m"	
-		$echo " 1 安装到/data/userdisk目录(推荐，支持软固化功能)"
+		$echo " 1 安装到/data目录(推荐，支持软固化功能)"
 		$echo " 2 安装到USB设备(支持软固化功能)"
 		[ "$(dir_avail /etc)" != 0 ] && $echo " 3 安装到/etc目录(不推荐)"
 		$echo " 0 退出安装"
@@ -217,8 +219,8 @@ if [ -n "$systype" ];then
 				dir=/etc
 				systype=""
 			else
-				$echo "\033[31m你的设备不支持安装到/etc目录，已改为安装到/data/userdisk\033[0m"	
-				dir=/data/userdisk
+				$echo "\033[31m你的设备不支持安装到/etc目录，已改为安装到/data\033[0m"	
+				dir=data
 			fi
 			;;
 		*)
