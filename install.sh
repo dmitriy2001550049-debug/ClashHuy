@@ -3,6 +3,17 @@
 
 echo='echo -e' && [ -n "$(echo -e|grep e)" ] && echo=echo
 #[ -z "$1" ] && test=0 || test=$1
+# 优先使用启动参数传入的安装源
+[ -n "$1" ] && url="$1"
+# 兼容 GitHub 页面链接，自动转换为 raw 链接
+case "$url" in
+  https://github.com/*/tree/*)
+    url=$(echo "$url" | sed 's|github.com|raw.githubusercontent.com|;s|/tree/|/|')
+    ;;
+  https://github.com/*/blob/*)
+    url=$(echo "$url" | sed 's|github.com|raw.githubusercontent.com|;s|/blob/|/|')
+    ;;
+esac
 
 echo "***********************************************"
 echo "**                 欢迎使用                  **"
@@ -58,7 +69,7 @@ webget(){
 	fi
 }
 #检查更新
-url_cdn="https://raw.fastgit.org/juewuy/ShellClash"
+url_cdn="$url"
 [ -z "$url" ] && url=$url_cdn
 echo -----------------------------------------------
 $echo "\033[33m请选择想要安装的版本：\033[0m"	
@@ -69,7 +80,7 @@ read -p "请输入相应数字 > " num
 if [ -z $num ];then
 	echo 安装已取消！ && exit 1;
 elif [ "$num" = "1" ];then
-	webget /tmp/clashrelease $url_cdn/master/bin/release_version echoon rediroff 2>/tmp/clashrelease
+	webget /tmp/clashrelease $url_cdn/bin/release_version echoon rediroff 2>/tmp/clashrelease
 	if [ "$result" = "200" ];then
 		release_new=$(cat /tmp/clashrelease | head -1)
 		url_dl="$url_cdn/$release_new"
@@ -86,15 +97,21 @@ rm -rf /tmp/clashrelease
 tarurl=$url_dl/bin/clashfm.tar.gz
 
 gettar(){
-	webget /tmp/clashfm.tar.gz $tarurl
-	[ "$result" != "200" ] && echo "文件下载失败,请尝试使用其他安装源！" && exit 1
+	curl -L -k -o /tmp/clashfm.tar.gz "$tarurl"
+	[ $? -ne 0 ] && echo "文件下载失败,请尝试使用其他安装源！" && exit 1
+	gzip -t /tmp/clashfm.tar.gz >/dev/null 2>&1 || { echo "下载的文件不是有效的gzip压缩包！"; rm -rf /tmp/clashfm.tar.gz; exit 1; }
+	tar -tzf /tmp/clashfm.tar.gz >/dev/null 2>&1 || { echo "下载的文件不是有效的tar.gz安装包！"; rm -rf /tmp/clashfm.tar.gz; exit 1; }
 	$clashdir/start.sh stop 2>/dev/null
 	#解压
 	echo -----------------------------------------------
 	echo 开始解压文件！
-	mkdir -p $clashdir > /dev/null
-	tar -zxvf '/tmp/clashfm.tar.gz' -C $clashdir/
-	[ $? -ne 0 ] && echo "文件解压失败！" && rm -rf /tmp/clashfm.tar.gz && exit 1 
+	tmp_extract_dir="/tmp/clash_extract"
+	rm -rf "$tmp_extract_dir"
+	mkdir -p "$tmp_extract_dir" "$clashdir" > /dev/null
+	tar -zxf /tmp/clashfm.tar.gz -C "$tmp_extract_dir"
+	[ $? -ne 0 ] && echo "文件解压失败！" && rm -rf /tmp/clashfm.tar.gz "$tmp_extract_dir" && exit 1
+	cp -af "$tmp_extract_dir"/. "$clashdir"/
+	[ $? -ne 0 ] && echo "文件复制失败！" && rm -rf /tmp/clashfm.tar.gz "$tmp_extract_dir" && exit 1 
 	#初始化文件目录
 	[ -f "$clashdir/mark" ] || echo '#标识clash运行状态的文件，不明勿动！' > $clashdir/mark
 	#判断系统类型写入不同的启动文件
@@ -148,7 +165,7 @@ gettar(){
 		chmod 755 $clashdir/misnap_init.sh
 		uci set firewall.ShellClash=include
 		uci set firewall.ShellClash.type='script'
-		uci set firewall.ShellClash.path='/data/clash/misnap_init.sh'
+		uci set firewall.ShellClash.path='/data/userdisk/clash/misnap_init.sh'
 		uci set firewall.ShellClash.enabled='1'
 		uci commit firewall
 		setconfig systype $systype
@@ -163,7 +180,8 @@ gettar(){
 		nvram commit
 	}
 	#删除临时文件
-	rm -rf /tmp/clashfm.tar.gz 
+	rm -rf /tmp/clashfm.tar.gz
+	rm -rf /tmp/clash_extract
 	rm -rf $clashdir/clash.service
 }
 #下载及安装
@@ -203,7 +221,7 @@ if [ -n "$systype" ];then
 		read -p "请输入相应数字 > " num
 		case "$num" in 
 		1)
-			dir=/data
+			dir=/data/userdisk
 			;;
 		2)
 			set_usb_dir ;;
